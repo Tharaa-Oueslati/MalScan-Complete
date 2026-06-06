@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+  logsentinel:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./logs:/app/logs
+      - ./config:/app/config
+    environment:
+      - LOGSENTINEL_WATCH=logs/samples
+      - LOGSENTINEL_INTERVAL=5
+    restart: unless-stopped
+    networks:
+      - sentinel-net
+
+  # Optional: ship logs to Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    networks:
+      - sentinel-net
+    profiles:
+      - elk
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.0
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    networks:
+      - sentinel-net
+    depends_on:
+      - elasticsearch
+    profiles:
+      - elk
+
+networks:
+  sentinel-net:
+    driver: bridge

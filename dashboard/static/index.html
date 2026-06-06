@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LogSentinel — SIEM Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0c10;
+  --bg2:#0f1218;
+  --bg3:#151921;
+  --bg4:#1c2130;
+  --border:#1e2535;
+  --border2:#242d40;
+  --text:#c9d1e0;
+  --text2:#7a8ba8;
+  --text3:#3d4d63;
+  --accent:#4a9eff;
+  --accent2:#1a4a80;
+  --green:#2ecc71;
+  --green2:#1a6b3a;
+  --amber:#f39c12;
+  --amber2:#6b430a;
+  --red:#e74c3c;
+  --red2:#6b1e1a;
+  --purple:#9b59b6;
+  --purple2:#4a1e5e;
+  --font-mono:'JetBrains Mono', monospace;
+  --font-sans:'DM Sans', sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font-sans);font-size:14px;line-height:1.5;min-height:100vh}
+
+/* ── Layout ─────────────────────────────────────────── */
+.shell{display:grid;grid-template-columns:220px 1fr;grid-template-rows:52px 1fr;min-height:100vh}
+.topbar{grid-column:1/-1;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:16px}
+.sidebar{background:var(--bg2);border-right:1px solid var(--border);padding:16px 0;display:flex;flex-direction:column;gap:2px}
+.main{background:var(--bg);padding:20px;overflow-y:auto}
+
+/* ── Topbar ─────────────────────────────────────────── */
+.logo{font-family:var(--font-mono);font-size:13px;font-weight:700;color:#fff;letter-spacing:0.04em;display:flex;align-items:center;gap:8px}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.topbar-meta{margin-left:auto;display:flex;align-items:center;gap:20px;font-family:var(--font-mono);font-size:11px;color:var(--text2)}
+.topbar-time{color:var(--accent);font-weight:500}
+.topbar-badge{background:var(--red2);color:#ff7f7f;border:1px solid var(--red);padding:2px 8px;border-radius:3px;font-size:11px;font-weight:500;cursor:pointer;transition:.15s}
+.topbar-badge:hover{background:var(--red)}
+
+/* ── Sidebar ─────────────────────────────────────────── */
+.nav-section{font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;padding:8px 16px 4px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:8px 16px;cursor:pointer;color:var(--text2);font-size:13px;transition:.1s;border-left:2px solid transparent}
+.nav-item:hover{background:var(--bg3);color:var(--text)}
+.nav-item.active{background:var(--bg4);color:var(--accent);border-left-color:var(--accent)}
+.nav-icon{font-family:var(--font-mono);font-size:12px;width:16px;text-align:center}
+.nav-badge{margin-left:auto;background:var(--red2);color:#ff7f7f;border-radius:3px;padding:1px 5px;font-size:11px;font-family:var(--font-mono)}
+.sidebar-footer{margin-top:auto;padding:12px 16px;border-top:1px solid var(--border);font-family:var(--font-mono);font-size:10px;color:var(--text3)}
+
+/* ── Grid ─────────────────────────────────────────── */
+.stats-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:14px 16px}
+.stat-label{font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.stat-value{font-family:var(--font-mono);font-size:22px;font-weight:700;line-height:1}
+.stat-sub{font-size:11px;color:var(--text2);margin-top:4px}
+.v-critical{color:var(--red)}
+.v-high{color:var(--amber)}
+.v-medium{color:#e67e22}
+.v-low{color:var(--green)}
+.v-total{color:var(--accent)}
+
+.content-grid{display:grid;grid-template-columns:1fr 340px;gap:16px;margin-bottom:16px}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:6px}
+.panel-header{display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);gap:10px}
+.panel-title{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text);letter-spacing:.06em;text-transform:uppercase}
+.panel-sub{margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--text3)}
+.panel-body{padding:14px 16px}
+
+/* ── Timeline chart ─────────────────────────────────── */
+#timeline-wrap{position:relative;height:140px;width:100%}
+
+/* ── Alerts table ─────────────────────────────────────*/
+.alert-feed{max-height:420px;overflow-y:auto}
+.alert-row{display:grid;grid-template-columns:70px 90px 1fr 100px 70px;gap:8px;align-items:center;padding:9px 16px;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:11px;transition:.1s;cursor:pointer}
+.alert-row:hover{background:var(--bg3)}
+.alert-row.flash{animation:rowflash .6s ease-out}
+@keyframes rowflash{0%{background:rgba(74,158,255,.15)}100%{background:transparent}}
+.sev-pill{padding:2px 7px;border-radius:3px;font-size:10px;font-weight:700;text-align:center}
+.sev-CRITICAL{background:var(--red2);color:#ff7f7f;border:1px solid var(--red)}
+.sev-HIGH{background:var(--amber2);color:#ffd580;border:1px solid var(--amber)}
+.sev-MEDIUM{background:#3d2c0a;color:#e6a832;border:1px solid #8a5c12}
+.sev-LOW{background:var(--green2);color:#7aecaa;border:1px solid var(--green)}
+.sev-INFO{background:#1a2035;color:#7a9fd4;border:1px solid #2a4080}
+.rule-text{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.desc-text{color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}
+.mitre-badge{color:var(--purple);font-size:10px}
+.alert-col-header{display:grid;grid-template-columns:70px 90px 1fr 100px 70px;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border2);font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase}
+
+/* ── Source breakdown ─────────────────────────────── */
+.source-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.source-row:last-child{border-bottom:0}
+.source-name{font-family:var(--font-mono);font-size:11px;color:var(--text);width:70px;flex-shrink:0}
+.source-bar-wrap{flex:1;background:var(--bg4);border-radius:2px;height:6px;overflow:hidden}
+.source-bar{height:6px;border-radius:2px;transition:width .6s ease}
+.source-count{font-family:var(--font-mono);font-size:11px;color:var(--text2);width:40px;text-align:right;flex-shrink:0}
+
+/* ── Bottom row ────────────────────────────────────── */
+.bottom-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+/* ── Log stream ─────────────────────────────────────── */
+.log-stream{font-family:var(--font-mono);font-size:11px;line-height:1.6;max-height:200px;overflow-y:auto;color:var(--text2);padding:12px 16px}
+.log-ts{color:var(--text3)}
+.log-src-auth{color:var(--accent)}
+.log-src-syslog{color:var(--green)}
+.log-src-apache{color:var(--amber)}
+.log-src-nginx{color:#e67e22}
+.log-msg{color:var(--text)}
+
+/* ── Campaign map ─────────────────────────────────── */
+.campaign-item{padding:10px 0;border-bottom:1px solid var(--border)}
+.campaign-item:last-child{border-bottom:0}
+.campaign-header{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.campaign-id{font-family:var(--font-mono);font-size:10px;color:var(--accent)}
+.campaign-ip{font-family:var(--font-mono);font-size:11px;color:var(--text);font-weight:500}
+.campaign-events{font-family:var(--font-mono);font-size:10px;color:var(--text2)}
+.campaign-chain{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.chain-tag{background:var(--bg4);border:1px solid var(--border2);border-radius:3px;padding:1px 6px;font-family:var(--font-mono);font-size:9px;color:var(--text2)}
+
+/* ── Scrollbar ─────────────────────────────────────── */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* ── Status bar ─────────────────────────────────────── */
+.statusbar{grid-column:1/-1;background:var(--accent2);border-top:1px solid var(--accent);display:flex;align-items:center;padding:0 16px;gap:20px;height:24px;font-family:var(--font-mono);font-size:10px;color:#8cc4ff}
+.status-sep{color:var(--accent2);margin:0 4px}|
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- Topbar -->
+<header class="topbar">
+  <div class="logo">
+    <span class="logo-dot"></span>
+    LOGSENTINEL
+  </div>
+  <span style="color:var(--text3);font-family:var(--font-mono);font-size:11px">/ SIEM-LITE v1.0</span>
+  <div class="topbar-meta">
+    <span>HOST: sentinel-01</span>
+    <span class="topbar-time" id="clock">--:--:--</span>
+    <span class="topbar-badge" id="alert-count-top" onclick="window.scrollTo(0,300)">● 0 ACTIVE ALERTS</span>
+  </div>
+</header>
+
+<!-- Sidebar -->
+<nav class="sidebar">
+  <div class="nav-section">Monitor</div>
+  <div class="nav-item active"><span class="nav-icon">▣</span> Overview <span class="nav-badge" id="nav-crit">0</span></div>
+  <div class="nav-item"><span class="nav-icon">⊟</span> Alerts</div>
+  <div class="nav-item"><span class="nav-icon">≡</span> Log Stream</div>
+  <div class="nav-section">Detect</div>
+  <div class="nav-item"><span class="nav-icon">◈</span> Campaigns</div>
+  <div class="nav-item"><span class="nav-icon">⬡</span> MITRE ATT&CK</div>
+  <div class="nav-section">Sources</div>
+  <div class="nav-item"><span class="nav-icon">⊕</span> auth.log</div>
+  <div class="nav-item"><span class="nav-icon">⊕</span> syslog</div>
+  <div class="nav-item"><span class="nav-icon">⊕</span> Apache</div>
+  <div class="nav-item"><span class="nav-icon">⊕</span> Nginx</div>
+  <div class="sidebar-footer">
+    <div>engine: running</div>
+    <div id="sb-ingested">ingested: 0 events</div>
+    <div id="sb-uptime">uptime: 0s</div>
+  </div>
+</nav>
+
+<!-- Main -->
+<main class="main">
+
+  <!-- Stats row -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Total Alerts</div>
+      <div class="stat-value v-total" id="s-total">0</div>
+      <div class="stat-sub">all severities</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Critical</div>
+      <div class="stat-value v-critical" id="s-critical">0</div>
+      <div class="stat-sub">immediate action</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">High</div>
+      <div class="stat-value v-high" id="s-high">0</div>
+      <div class="stat-sub">investigate soon</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Medium</div>
+      <div class="stat-value v-medium" id="s-medium">0</div>
+      <div class="stat-sub">monitor closely</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Events/min</div>
+      <div class="stat-value" style="color:var(--text)" id="s-eps">—</div>
+      <div class="stat-sub">ingestion rate</div>
+    </div>
+  </div>
+
+  <!-- Timeline + Source breakdown -->
+  <div class="content-grid">
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Alert Timeline</span>
+        <span class="panel-sub">24h · auto-refresh 5s</span>
+      </div>
+      <div class="panel-body">
+        <div id="timeline-wrap"><canvas id="timeline" role="img" aria-label="Alert frequency timeline over 24 hours"></canvas></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Source Breakdown</span>
+      </div>
+      <div class="panel-body" id="source-breakdown">
+        <div style="color:var(--text3);font-family:var(--font-mono);font-size:11px">Waiting for data…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alert feed -->
+  <div class="panel" style="margin-bottom:16px">
+    <div class="panel-header">
+      <span class="panel-title">Alert Feed</span>
+      <span style="margin-left:auto;display:flex;gap:8px">
+        <select id="sev-filter" style="background:var(--bg4);color:var(--text2);border:1px solid var(--border2);border-radius:3px;padding:2px 6px;font-family:var(--font-mono);font-size:10px;outline:none">
+          <option value="">ALL</option>
+          <option value="critical">CRITICAL</option>
+          <option value="high">HIGH</option>
+          <option value="medium">MEDIUM</option>
+          <option value="low">LOW</option>
+        </select>
+      </span>
+    </div>
+    <div class="alert-col-header">
+      <span>Time</span><span>Severity</span><span>Rule / Description</span><span>IP / Host</span><span>MITRE</span>
+    </div>
+    <div class="alert-feed" id="alert-feed">
+      <div style="padding:20px;text-align:center;color:var(--text3);font-family:var(--font-mono);font-size:11px">No alerts yet — pipeline is listening…</div>
+    </div>
+  </div>
+
+  <!-- Bottom row -->
+  <div class="bottom-row">
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Live Log Stream</span>
+        <span class="panel-sub" id="stream-count">0 events</span>
+      </div>
+      <div class="log-stream" id="log-stream">
+        <span style="color:var(--text3)">Waiting for log events…</span>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Correlated Campaigns</span>
+        <span class="panel-sub" id="campaign-count">0 active</span>
+      </div>
+      <div class="panel-body" id="campaign-list">
+        <div style="color:var(--text3);font-family:var(--font-mono);font-size:11px">No correlated campaigns</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+/* ── Clock ─────────────────────────────────────────── */
+const clockEl = document.getElementById('clock');
+setInterval(() => {
+  const n = new Date();
+  clockEl.textContent = n.toTimeString().slice(0,8);
+}, 1000);
+
+/* ── Uptime ─────────────────────────────────────────── */
+const startTime = Date.now();
+setInterval(() => {
+  const sec = Math.floor((Date.now() - startTime)/1000);
+  const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+  document.getElementById('sb-uptime').textContent =
+    `uptime: ${h?h+'h ':''}${m?m+'m ':''}${s}s`;
+}, 1000);
+
+/* ── Timeline chart ─────────────────────────────────── */
+let timelineChart;
+function initTimeline(data){
+  const labels = data.map(d => d.hour.slice(11,16));
+  const counts = data.map(d => d.count);
+  const ctx = document.getElementById('timeline').getContext('2d');
+  if(timelineChart) timelineChart.destroy();
+  timelineChart = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels,
+      datasets:[{
+        label:'Alerts',
+        data:counts,
+        backgroundColor:'rgba(74,158,255,0.25)',
+        borderColor:'#4a9eff',
+        borderWidth:1,
+        borderRadius:2
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#3d4d63',font:{family:'JetBrains Mono',size:10},maxRotation:0},grid:{color:'rgba(255,255,255,0.03)'}},
+        y:{ticks:{color:'#3d4d63',font:{family:'JetBrains Mono',size:10},stepSize:1},grid:{color:'rgba(255,255,255,0.05)'},beginAtZero:true}
+      }
+    }
+  });
+}
+
+/* ── Source bars ─────────────────────────────────────── */
+const SRC_COLORS = {auth:'#4a9eff',syslog:'#2ecc71',apache:'#f39c12',nginx:'#e67e22'};
+function renderSources(by_source){
+  const total = Object.values(by_source).reduce((a,b)=>a+b,0)||1;
+  const el = document.getElementById('source-breakdown');
+  if(!Object.keys(by_source).length){
+    el.innerHTML='<div style="color:var(--text3);font-family:var(--font-mono);font-size:11px">Waiting for data…</div>';
+    return;
+  }
+  el.innerHTML = Object.entries(by_source).map(([src,cnt])=>`
+    <div class="source-row">
+      <span class="source-name">${src}</span>
+      <div class="source-bar-wrap">
+        <div class="source-bar" style="width:${Math.round(cnt/total*100)}%;background:${SRC_COLORS[src]||'#7a8ba8'}"></div>
+      </div>
+      <span class="source-count">${cnt}</span>
+    </div>`).join('');
+}
+
+/* ── Alert feed ──────────────────────────────────────── */
+let knownAlertIds = new Set();
+function renderAlerts(alerts){
+  const filter = document.getElementById('sev-filter').value.toLowerCase();
+  const feed = document.getElementById('alert-feed');
+  const filtered = filter ? alerts.filter(a=>a.severity===filter) : alerts;
+  if(!filtered.length){
+    feed.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-family:var(--font-mono);font-size:11px">No alerts matching filter</div>';
+    return;
+  }
+  feed.innerHTML = filtered.slice(0,60).map(a => {
+    const isNew = !knownAlertIds.has(a.id);
+    const ts = a.created_at ? a.created_at.slice(11,19) : '--:--:--';
+    const sev = (a.severity||'info').toUpperCase();
+    const ip = a.ip || a.host || '—';
+    const desc = a.description || a.message || '';
+    return `<div class="alert-row${isNew?' flash':''}" title="${desc}">
+      <span style="color:var(--text3)">${ts}</span>
+      <span class="sev-pill sev-${sev}">${sev}</span>
+      <span><div class="rule-text">${a.rule||'ALERT'}</div><div class="desc-text">${desc}</div></span>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--text2)">${ip}</span>
+      <span class="mitre-badge">${a.mitre||'—'}</span>
+    </div>`;
+  }).join('');
+  alerts.forEach(a => knownAlertIds.add(a.id));
+}
+
+/* ── Log stream ──────────────────────────────────────── */
+let logLines = [];
+function renderEvents(events){
+  document.getElementById('stream-count').textContent = `${events.length} events`;
+  document.getElementById('sb-ingested').textContent = `ingested: ${events.length} events`;
+  const fresh = events.filter(e => !logLines.includes(e.id)).slice(0,20);
+  fresh.forEach(e => logLines.unshift(e.id));
+  if(logLines.length > 300) logLines = logLines.slice(0,300);
+
+  const el = document.getElementById('log-stream');
+  if(!events.length){
+    el.innerHTML='<span style="color:var(--text3)">Waiting for log events…</span>';
+    return;
+  }
+  el.innerHTML = events.slice(0,80).map(e => {
+    const ts = e.timestamp ? String(e.timestamp).slice(11,19) : '';
+    const src = e.source||'sys';
+    const srcClass = `log-src-${src}`;
+    const msg = (e.message||e.raw||'').slice(0,120);
+    return `<div><span class="log-ts">${ts} </span><span class="${srcClass}">[${src}]</span> <span class="log-msg">${msg}</span></div>`;
+  }).join('');
+}
+
+/* ── Campaigns ───────────────────────────────────────── */
+function renderCampaigns(alerts){
+  const camps = {};
+  alerts.forEach(a => {
+    if(a.campaign_id){
+      if(!camps[a.campaign_id]) camps[a.campaign_id] = {ip:a.ip||a.host, rules:[], count:0};
+      camps[a.campaign_id].count++;
+      if(!camps[a.campaign_id].rules.includes(a.rule)) camps[a.campaign_id].rules.push(a.rule);
+    }
+  });
+  const entries = Object.entries(camps);
+  document.getElementById('campaign-count').textContent = `${entries.length} active`;
+  const el = document.getElementById('campaign-list');
+  if(!entries.length){
+    el.innerHTML='<div style="color:var(--text3);font-family:var(--font-mono);font-size:11px">No correlated campaigns</div>';
+    return;
+  }
+  el.innerHTML = entries.slice(0,6).map(([id, c]) => `
+    <div class="campaign-item">
+      <div class="campaign-header">
+        <span class="campaign-id">#${id}</span>
+        <span class="campaign-ip">${c.ip||'unknown'}</span>
+        <span class="campaign-events">${c.count} events</span>
+      </div>
+      <div class="campaign-chain">${c.rules.map(r=>`<span class="chain-tag">${r}</span>`).join('')}</div>
+    </div>`).join('');
+}
+
+/* ── Summary stats ──────────────────────────────────── */
+function updateStats(summary){
+  const a = summary.alerts||{};
+  const total = Object.values(a).reduce((x,y)=>x+y,0);
+  document.getElementById('s-total').textContent = total;
+  document.getElementById('s-critical').textContent = a.critical||0;
+  document.getElementById('s-high').textContent = a.high||0;
+  document.getElementById('s-medium').textContent = a.medium||0;
+  document.getElementById('alert-count-top').textContent = `● ${(a.critical||0)+(a.high||0)} ACTIVE ALERTS`;
+  document.getElementById('nav-crit').textContent = a.critical||0;
+}
+
+/* ── Fetch & poll ────────────────────────────────────── */
+let evtPerMin = [];
+async function fetchAll(){
+  try{
+    const [sumRes, alertRes, tlRes, evtRes] = await Promise.all([
+      fetch('/api/summary'), fetch('/api/alerts'),
+      fetch('/api/timeline'), fetch('/api/events')
+    ]);
+    const sum = await sumRes.json();
+    const alerts = await alertRes.json();
+    const tl = await tlRes.json();
+    const events = await evtRes.json();
+
+    updateStats(sum);
+    renderSources(sum.events?.by_source||{});
+    initTimeline(tl);
+    renderAlerts(alerts);
+    renderEvents(events);
+    renderCampaigns(alerts);
+
+    evtPerMin.push(events.length);
+    if(evtPerMin.length>12) evtPerMin.shift();
+    const rate = evtPerMin.length ? Math.round(evtPerMin[evtPerMin.length-1]/5) : 0;
+    document.getElementById('s-eps').textContent = rate;
+  } catch(e){
+    // API not yet running — show demo data
+    loadDemo();
+  }
+}
+
+/* ── Demo data (shown before Flask is running) ─────── */
+function loadDemo(){
+  const now = new Date();
+  const demoAlerts = [
+    {id:'a1',created_at:new Date(now-3000).toISOString(),severity:'critical',rule:'SSH_BRUTE_FORCE',description:'5 failed SSH logins from 185.234.219.11 within 60s',ip:'185.234.219.11',mitre:'T1110.001',campaign_id:'a1'},
+    {id:'a2',created_at:new Date(now-8000).toISOString(),severity:'high',rule:'PRIVILEGE_ESCALATION',description:'Possible privilege escalation via sudo: alice → root',ip:null,host:'web-01',user:'alice',mitre:'T1548.003',campaign_id:null},
+    {id:'a3',created_at:new Date(now-15000).toISOString(),severity:'high',rule:'SSH_BRUTE_FORCE',description:'5 failed SSH logins from 92.118.160.42 within 60s',ip:'92.118.160.42',mitre:'T1110.001',campaign_id:'a3'},
+    {id:'a4',created_at:new Date(now-22000).toISOString(),severity:'medium',rule:'UNUSUAL_HOURS_LOGIN',description:'Successful SSH login at 02:47 (off-hours)',ip:'10.0.0.14',host:'db-02',user:'deploy',mitre:'T1078',campaign_id:'a3'},
+    {id:'a5',created_at:new Date(now-45000).toISOString(),severity:'medium',rule:'HTTP_SCANNING',description:'20 HTTP 4xx responses from 45.33.32.156 in 30s — possible scanning',ip:'45.33.32.156',mitre:'T1595.002',campaign_id:null},
+    {id:'a6',created_at:new Date(now-90000).toISOString(),severity:'low',rule:'SU_AUTH_FAILURE',description:'su authentication failure — possible lateral movement',host:'app-03',mitre:'T1548',campaign_id:null},
+    {id:'a7',created_at:new Date(now-120000).toISOString(),severity:'critical',rule:'ROOTKIT_KEYWORD',description:'Rootkit keyword detected in syslog',host:'app-03',mitre:'T1014',campaign_id:'a7'},
+  ];
+  const demoSummary = {
+    alerts:{critical:2,high:2,medium:2,low:1,info:0},
+    events:{total:1248,by_source:{auth:480,syslog:312,apache:312,nginx:144}}
+  };
+  const demoTimeline = Array.from({length:24},(_,i)=>{
+    const h = new Date(now.getTime() - (23-i)*3600000);
+    return {hour:h.toISOString().slice(0,13)+':00', count:Math.floor(Math.random()*8)};
+  });
+  demoTimeline[22].count = 3; demoTimeline[23].count = 5;
+
+  const demoEvents = Array.from({length:20},(_,i)=>({
+    id:'e'+i,
+    timestamp: new Date(now - i*4000).toISOString(),
+    source: ['auth','syslog','apache','nginx'][i%4],
+    message: [
+      'Accepted publickey for deploy from 10.0.0.14 port 51234',
+      'kernel: [12345.678] iptables: IN=eth0 SRC=185.234.219.11',
+      'GET /admin HTTP/1.1 → 404',
+      'Failed password for root from 92.118.160.42 port 34521',
+      'POST /login HTTP/1.1 → 200',
+      'sudo: alice : COMMAND=/bin/bash',
+      'nginx: 45.33.32.156 - GET /wp-admin → 403',
+    ][i%7]
+  }));
+
+  updateStats(demoSummary);
+  renderSources(demoSummary.events.by_source);
+  initTimeline(demoTimeline);
+  renderAlerts(demoAlerts);
+  renderEvents(demoEvents);
+  renderCampaigns(demoAlerts);
+  document.getElementById('sb-ingested').textContent = 'ingested: 1,248 events';
+  document.getElementById('s-eps').textContent = '4';
+}
+
+document.getElementById('sev-filter').addEventListener('change', fetchAll);
+
+fetchAll();
+setInterval(fetchAll, 5000);
+</script>
+</body>
+</html>

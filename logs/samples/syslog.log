@@ -1,0 +1,6 @@
+Jun  5 08:00:01 app-03 kernel: [12345.678901] iptables DROP IN=eth0 OUT= SRC=185.234.219.11 DST=10.0.0.5
+Jun  5 08:01:15 app-03 kernel: [12401.001234] ptrace: process 3141 attached to 3142
+Jun  5 08:05:22 app-03 kernel: [12655.112233] Out of memory: Killed process 9812 (java) total-vm:4096000kB
+Jun  5 10:30:00 app-03 kernel: [18000.000000] Kernel panic - not syncing: VFS: Unable to mount root fs
+Jun  5 12:00:00 web-01 ntpd[123]: time sync OK
+Jun  5 13:00:00 web-01 cron[456]: (root) CMD (/usr/lib/cron/run-crons)
